@@ -1,0 +1,76 @@
+# --- Deployment de l'API FastAPI ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: recruiting
+spec:
+  replicas: 2                      # 2 instances (résilience + load-balancing)
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      imagePullSecrets:            # ← pour tirer l'image privée depuis GHCR
+        - name: ghcr-secret
+      containers:
+        - name: api
+          image: ghcr.io/fab83i/recruiting-api:1.0.0
+          ports:
+            - containerPort: 8000
+          env:
+            # Connexion à la base : on construit l'URL avec le mot de passe du Secret
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: recruiting-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: recruiting-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: recruiting-secrets
+                  key: JWT_SECRET
+            - name: ADMIN_EMAIL
+              value: fabiencalvo@gmail.com
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: recruiting-secrets
+                  key: ADMIN_PASSWORD
+            - name: CORS_ORIGINS
+              value: "*"
+          # --- Probes de santé (grâce à ta route /health) ---
+          livenessProbe:           # "le conteneur est-il vivant ?" sinon → redémarrage
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:          # "est-il prêt à recevoir du trafic ?" sinon → retiré du Service
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# --- Service de l'API (interne au cluster) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: suivi-api # on met suivi-api car c'est le nom donné dans la conf nginx du front (pour le reverse proxy)
+  namespace: recruiting
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

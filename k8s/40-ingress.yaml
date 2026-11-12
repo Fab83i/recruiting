@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: recruiting-ingress
+  namespace: recruiting
+spec:
+  rules:
+    - host: recruiting.local            # le nom de domaine qui déclenche le routage
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: front        # → route vers le Service du front
+                port:
+                  number: 80
