@@ -1,0 +1,23 @@
+namespace: recruiting
+
+# --- API Backend ---
+api:
+  replicas: 2
+  image: ghcr.io/fab83i/recruiting-api:1.0.0
+  adminEmail: fabiencalvo@gmail.com
+
+# --- PostgreSQL ---
+postgres:
+  image: postgres:16-alpine
+  user: suivi
+  db: suivi
+  storage: 2Gi
+
+# --- Front (nginx + HTML) ---
+front:
+  replicas: 2
+  image: ghcr.io/fab83i/recruiting-front:1.0.0
+
+# --- Ingress ---
+ingress:
+  host: recruiting.local

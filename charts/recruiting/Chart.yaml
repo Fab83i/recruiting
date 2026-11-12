@@ -1,0 +1,6 @@
+apiVersion: v2
+name: recruiting
+description: Application Suivi Entretiens (front + API + PostgreSQL)
+type: application
+version: 0.1.0          # version du chart (le packaging Helm)
+appVersion: "1.0.0"     # version de l'appli
