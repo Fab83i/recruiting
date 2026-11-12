@@ -1,0 +1,14 @@
+# Secrets — ne JAMAIS commiter
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.db
+
+# Divers
+.DS_Store

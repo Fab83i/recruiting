@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: suivi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-suivi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suivi}
+      POSTGRES_DB: ${POSTGRES_DB:-suivi}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - suivi-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-suivi}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  suivi-api:
+    build: ./backend
+    container_name: suivi-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+    networks:
+      - suivi-net
+
+  suivi-front:
+    build: ./frontend
+    container_name: suivi-front
+    restart: unless-stopped
+    depends_on:
+      - suivi-api
+    ports:
+      - "8080:80"            # accès : http://localhost:8080
+    networks:
+      - suivi-net
+
+volumes:
+  pgdata:
+
+networks:
+  suivi-net:
+    driver: bridge

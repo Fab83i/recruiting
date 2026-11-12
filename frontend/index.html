@@ -1,0 +1,1355 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Suivi Entretiens Dev</title>
+<style>
+  /* Layout: sidebar liste candidats + panneau trame RV2 ; stack en colonne sous 760px */
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #eceef1;
+    --fg: #1a1d21;
+    --fg-soft: #5a626c;
+    --line: #d9dde2;
+    --accent: #1f6feb;
+    --accent-soft: #e7f0ff;
+    --go: #1a7f52;
+    --go-soft: #dcf2e6;
+    --hold: #b4791a;
+    --hold-soft: #faecd2;
+    --nogo: #c13b3b;
+    --nogo-soft: #f7dede;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(20,25,35,.06), 0 2px 8px rgba(20,25,35,.05);
+    --font-head: "Space Grotesk", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+    --font-mono: "Space Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c;
+      --surface: #1e2228;
+      --surface-2: #272c33;
+      --fg: #e8eaed;
+      --fg-soft: #9aa3ad;
+      --line: #343a42;
+      --accent: #4f93ff;
+      --accent-soft: #1b2b45;
+      --go: #43b483;
+      --go-soft: #163327;
+      --hold: #d6a44a;
+      --hold-soft: #3a2f16;
+      --nogo: #e2706e;
+      --nogo-soft: #3d1f1f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c;
+    --surface: #1e2228;
+    --surface-2: #272c33;
+    --fg: #e8eaed;
+    --fg-soft: #9aa3ad;
+    --line: #343a42;
+    --accent: #4f93ff;
+    --accent-soft: #1b2b45;
+    --go: #43b483;
+    --go-soft: #163327;
+    --hold: #d6a44a;
+    --hold-soft: #3a2f16;
+    --nogo: #e2706e;
+    --nogo-soft: #3d1f1f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    margin: 0;
+  }
+  h1, h2, h3 { font-family: var(--font-head); text-wrap: balance; margin: 0; }
+
+  /* Header */
+  .topbar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 11;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .7rem max(16px, env(safe-area-inset-right, 0px)) .7rem max(16px, env(safe-area-inset-left, 0px));
+    flex-wrap: wrap;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 12;
+    background: var(--surface);
+  }
+  .brand { display: flex; align-items: baseline; gap: .5rem; margin-right: auto; }
+  .brand h1 { font-size: 1.05rem; letter-spacing: -.01em; }
+  .brand .tag {
+    font-family: var(--font-mono);
+    font-size: .62rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--fg-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: .1rem .45rem;
+  }
+  .topbar button, .topbar label.btn {
+    font-family: var(--font-body);
+    font-size: .8rem;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--fg);
+    border-radius: 8px;
+    padding: .4rem .7rem;
+    cursor: pointer;
+  }
+  .topbar button:hover, .topbar label.btn:hover { border-color: var(--accent); }
+  .topbar button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .topbar button.icon { padding: .4rem .55rem; }
+
+  /* Layout */
+  .wrap {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    min-height: calc(100dvh - 54px);
+  }
+  @media (max-width: 760px) {
+    .wrap { grid-template-columns: 1fr; }
+    .sidebar { border-right: none !important; border-bottom: 1px solid var(--line); }
+    .sidebar.collapsed-mobile { display: none; }
+    .panel.hidden-mobile { display: none; }
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-right: 1px solid var(--line);
+    background: var(--surface);
+    padding: 1rem max(16px, env(safe-area-inset-left, 0px)) 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+  }
+  .search {
+    width: 100%;
+    font-family: var(--font-body);
+    font-size: .85rem;
+    padding: .5rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .cand-list { display: flex; flex-direction: column; gap: .4rem; list-style: none; margin: 0; padding: 0; }
+  .cand {
+    text-align: left;
+    width: 100%;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: .6rem .7rem;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    font-family: var(--font-body);
+    color: var(--fg);
+  }
+  .cand:hover { border-color: var(--accent); }
+  .cand.active { border-color: var(--accent); background: var(--accent-soft); }
+  .cand .name { font-weight: 600; font-size: .9rem; }
+  .cand .meta { font-size: .72rem; color: var(--fg-soft); display: flex; justify-content: space-between; gap: .4rem; align-items: center; }
+  .cand .score { font-family: var(--font-mono); }
+  .pill {
+    font-family: var(--font-mono);
+    font-size: .6rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: .12rem .45rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill.go { background: var(--go-soft); color: var(--go); }
+  .pill.hold { background: var(--hold-soft); color: var(--hold); }
+  .pill.nogo { background: var(--nogo-soft); color: var(--nogo); }
+  .pill.todo { background: var(--surface-2); color: var(--fg-soft); }
+  .empty-side { font-size: .8rem; color: var(--fg-soft); padding: .5rem 0; }
+
+  /* Panel */
+  .panel {
+    padding: 1.4rem max(16px, env(safe-area-inset-right, 0px)) 4rem max(16px, 20px);
+    max-width: 880px;
+  }
+  .panel-empty {
+    display: flex; flex-direction: column; gap: .6rem;
+    color: var(--fg-soft); font-size: .9rem;
+    padding: 3rem 1rem; text-align: center; align-items: center;
+  }
+  .panel-empty h2 { color: var(--fg); font-size: 1.1rem; }
+
+  .cand-head { display: flex; flex-wrap: wrap; gap: .8rem 1rem; align-items: flex-end; margin-bottom: 1.2rem; }
+  .cand-head .f { display: flex; flex-direction: column; gap: .2rem; }
+  .cand-head label { font-size: .64rem; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-soft); font-family: var(--font-mono); }
+  .cand-head input, .cand-head select {
+    font-family: var(--font-body);
+    font-size: .9rem;
+    padding: .4rem .5rem;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--fg);
+  }
+  .cand-head .grow { flex: 1 1 200px; min-width: 0; }
+  .cand-head .grow input { width: 100%; }
+
+  .scorebar {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: .8rem 1rem;
+    margin-bottom: 1.4rem;
+    box-shadow: var(--shadow);
+  }
+  .scorebar .total { font-family: var(--font-head); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .scorebar .total small { font-size: .9rem; color: var(--fg-soft); font-weight: 400; }
+  .scorebar .label { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-soft); font-family: var(--font-mono); }
+  .track { flex: 1 1 180px; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; min-width: 120px; }
+  .track > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .25s ease; }
+
+  details.block {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    margin-bottom: .9rem;
+    overflow: hidden;
+  }
+  details.block > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: .85rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    font-family: var(--font-head);
+    font-weight: 600;
+    font-size: .95rem;
+  }
+  details.block > summary::-webkit-details-marker { display: none; }
+  details.block > summary .chev { transition: transform .2s; color: var(--fg-soft); font-size: .8rem; }
+  details.block[open] > summary .chev { transform: rotate(90deg); }
+  details.block > summary .bscore {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: .8rem;
+    color: var(--fg-soft);
+    background: var(--surface-2);
+    border-radius: 999px;
+    padding: .15rem .55rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .block-body { padding: 0 1rem 1rem; display: flex; flex-direction: column; gap: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+  .block-note { font-size: .78rem; color: var(--fg-soft); font-style: italic; }
+
+  .q { display: flex; flex-direction: column; gap: .4rem; }
+  .q .qtext { font-size: .88rem; font-weight: 500; }
+  .q .expect {
+    font-size: .76rem;
+    color: var(--fg-soft);
+    background: var(--surface-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    padding: .4rem .6rem;
+  }
+  .q .expect b { color: var(--fg); font-weight: 600; }
+  .q textarea {
+    font-family: var(--font-body);
+    font-size: .85rem;
+    width: 100%;
+    min-height: 54px;
+    resize: vertical;
+    padding: .5rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.45;
+  }
+  .q textarea:focus, .cand-head input:focus, .search:focus, .final textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .rating { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+  .rating .rlabel { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-soft); font-family: var(--font-mono); margin-right: .2rem; }
+  .dot {
+    width: 26px; height: 26px; border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg-soft);
+    font-family: var(--font-mono); font-size: .8rem;
+    cursor: pointer; display: grid; place-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .dot:hover { border-color: var(--accent); }
+  .dot.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .dot.clear { font-size: .7rem; width: auto; padding: 0 .4rem; border-style: dashed; }
+
+  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; }
+  @media (max-width: 560px) { .info-grid { grid-template-columns: 1fr; } }
+  .info-f { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+  .info-f label { font-size: .64rem; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-soft); font-family: var(--font-mono); }
+  .info-f input {
+    font-family: var(--font-body); font-size: .85rem;
+    padding: .45rem .55rem; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--bg); color: var(--fg); width: 100%;
+  }
+  .info-f input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* Onglets */
+  .tabs { display: flex; gap: .3rem; }
+  .tabs button {
+    font-family: var(--font-body); font-size: .82rem;
+    border: 1px solid transparent; background: transparent;
+    color: var(--fg-soft); border-radius: 8px; padding: .4rem .7rem; cursor: pointer;
+  }
+  .tabs button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tabs button:hover { color: var(--fg); }
+
+  /* Banque technique */
+  .bank { padding: 1.2rem max(16px, env(safe-area-inset-right, 0px)) 4rem max(16px, 20px); max-width: 900px; }
+  .bank-intro { color: var(--fg-soft); font-size: .85rem; margin-bottom: 1rem; }
+  .techtabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.2rem; }
+  .techtabs button {
+    font-family: var(--font-body); font-size: .8rem;
+    border: 1px solid var(--line); background: var(--surface);
+    color: var(--fg); border-radius: 999px; padding: .4rem .8rem; cursor: pointer;
+  }
+  .techtabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .techtabs button:hover:not(.on) { border-color: var(--accent); }
+  .tech-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: .3rem; }
+  .tech-head h2 { font-size: 1.15rem; }
+  .tech-head .lvl { font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-soft); }
+  .tech-desc { color: var(--fg-soft); font-size: .82rem; margin-bottom: 1rem; }
+  .qa { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-bottom: .6rem; overflow: hidden; }
+  .qa > summary {
+    cursor: pointer; list-style: none; padding: .75rem .9rem;
+    font-size: .88rem; font-weight: 500; display: flex; gap: .6rem; align-items: baseline;
+  }
+  .qa > summary::-webkit-details-marker { display: none; }
+  .qa > summary .lv { font-family: var(--font-mono); font-size: .58rem; text-transform: uppercase; letter-spacing: .05em; padding: .1rem .4rem; border-radius: 999px; background: var(--surface-2); color: var(--fg-soft); white-space: nowrap; }
+  .qa > summary .lv.jr { color: var(--go); background: var(--go-soft); }
+  .qa > summary .lv.cf { color: var(--hold); background: var(--hold-soft); }
+  .qa > summary .lv.sr { color: var(--accent); background: var(--accent-soft); }
+  .qa[open] > summary { border-bottom: 1px solid var(--line); }
+  .qa .ans { padding: .8rem .9rem; font-size: .82rem; color: var(--fg); background: var(--bg); line-height: 1.55; }
+  .qa .ans b { color: var(--fg); }
+
+  .final { display: flex; flex-direction: column; gap: 1rem; }
+  .decision { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .decision button {
+    font-family: var(--font-body); font-size: .82rem;
+    border: 1px solid var(--line); background: var(--surface);
+    color: var(--fg); border-radius: 8px; padding: .45rem .8rem; cursor: pointer;
+  }
+  .decision button[data-d="go"].on { background: var(--go-soft); color: var(--go); border-color: var(--go); font-weight: 600; }
+  .decision button[data-d="hold"].on { background: var(--hold-soft); color: var(--hold); border-color: var(--hold); font-weight: 600; }
+  .decision button[data-d="nogo"].on { background: var(--nogo-soft); color: var(--nogo); border-color: var(--nogo); font-weight: 600; }
+  .final label.flabel { font-size: .64rem; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-soft); font-family: var(--font-mono); }
+  .final textarea {
+    font-family: var(--font-body); font-size: .88rem;
+    width: 100%; min-height: 90px; resize: vertical;
+    padding: .6rem .7rem; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--fg);
+  }
+  .row-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+  .row-actions button {
+    font-family: var(--font-body); font-size: .8rem;
+    border: 1px solid var(--line); background: var(--surface-2);
+    color: var(--fg); border-radius: 8px; padding: .45rem .8rem; cursor: pointer;
+  }
+  .row-actions button.danger:hover { border-color: var(--nogo); color: var(--nogo); }
+  .row-actions button:hover { border-color: var(--accent); }
+
+  .saved-flash {
+    position: fixed; z-index: 20;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    left: 50%; transform: translateX(-50%);
+    background: var(--fg); color: var(--bg);
+    font-size: .8rem; padding: .5rem .9rem; border-radius: 999px;
+    opacity: 0; transition: opacity .25s; pointer-events: none;
+    font-family: var(--font-body);
+  }
+  .saved-flash.show { opacity: 1; }
+  .back-mobile { display: none; }
+  @media (max-width: 760px) {
+    .back-mobile { display: inline-flex; }
+  }
+</style>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>Suivi Entretiens</h1>
+    <span class="tag">Cycle en V · Dev</span>
+  </div>
+  <div class="tabs" id="tabs">
+    <button data-tab="entretiens" class="on">Entretiens</button>
+    <button data-tab="banque">Banque technique</button>
+  </div>
+  <button class="back-mobile" id="backBtn" title="Retour liste">← Liste</button>
+  <button class="primary" id="newBtn">+ Candidat</button>
+  <button id="adminBtn" title="Gérer les comptes" hidden>Comptes</button>
+  <button id="logoutBtn" title="Se déconnecter">Déconnexion</button>
+  <button class="icon" id="themeBtn" title="Thème">◐</button>
+</div>
+
+<div id="loginView" hidden style="max-width:360px;margin:12vh auto;padding:0 20px;">
+  <h2 style="font-family:var(--font-head);margin-bottom:.3rem;">Suivi Entretiens</h2>
+  <p style="color:var(--fg-soft);font-size:.85rem;margin-bottom:1.4rem;">Connexion recruteur — données candidats confidentielles.</p>
+  <form id="loginForm" style="display:flex;flex-direction:column;gap:.8rem;">
+    <div style="display:flex;flex-direction:column;gap:.3rem;">
+      <label style="font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-soft);font-family:var(--font-mono);">Email</label>
+      <input id="loginEmail" type="email" autocomplete="username" required
+        style="font-size:.9rem;padding:.5rem .6rem;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--fg);">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.3rem;">
+      <label style="font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-soft);font-family:var(--font-mono);">Mot de passe</label>
+      <input id="loginPassword" type="password" autocomplete="current-password" required
+        style="font-size:.9rem;padding:.5rem .6rem;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--fg);">
+    </div>
+    <button type="submit" class="primary" style="margin-top:.4rem;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:8px;padding:.55rem;font-size:.9rem;cursor:pointer;">Se connecter</button>
+    <p id="loginError" style="color:var(--nogo);font-size:.8rem;min-height:1.1rem;margin:0;"></p>
+  </form>
+</div>
+
+<div id="adminView" hidden style="max-width:620px;margin:2rem auto;padding:0 20px;">
+  <h2 style="font-family:var(--font-head);margin-bottom:1rem;">Gestion des comptes</h2>
+  <form id="userForm" style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.4rem;">
+    <div style="display:flex;flex-direction:column;gap:.3rem;flex:1 1 180px;">
+      <label style="font-size:.64rem;text-transform:uppercase;color:var(--fg-soft);font-family:var(--font-mono);">Email</label>
+      <input id="newUserEmail" type="email" required style="font-size:.85rem;padding:.45rem .55rem;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--fg);">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.3rem;flex:1 1 140px;">
+      <label style="font-size:.64rem;text-transform:uppercase;color:var(--fg-soft);font-family:var(--font-mono);">Mot de passe</label>
+      <input id="newUserPassword" type="text" required style="font-size:.85rem;padding:.45rem .55rem;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--fg);">
+    </div>
+    <label style="display:flex;align-items:center;gap:.35rem;font-size:.82rem;color:var(--fg);">
+      <input id="newUserAdmin" type="checkbox"> admin
+    </label>
+    <button type="submit" class="primary" style="background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:8px;padding:.5rem .8rem;font-size:.85rem;cursor:pointer;">Créer</button>
+  </form>
+  <p id="userError" style="color:var(--nogo);font-size:.8rem;min-height:1rem;"></p>
+  <ul id="userList" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem;"></ul>
+  <button id="adminBackBtn" style="margin-top:1.4rem;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);border-radius:8px;padding:.45rem .8rem;font-size:.82rem;cursor:pointer;">← Retour aux entretiens</button>
+</div>
+
+<div class="wrap" id="viewEntretiens">
+  <aside class="sidebar" id="sidebar">
+    <input class="search" id="search" placeholder="Rechercher un candidat…" autocomplete="off">
+    <ul class="cand-list" id="candList"></ul>
+    <p class="empty-side" id="emptySide" hidden>Aucun candidat. Clique sur « + Candidat » pour commencer.</p>
+  </aside>
+
+  <main class="panel" id="panel">
+    <div class="panel-empty" id="panelEmpty">
+      <h2>Aucun candidat sélectionné</h2>
+      <p>Choisis un candidat dans la liste, ou crée-en un nouveau pour dérouler la trame RV2.</p>
+    </div>
+    <div id="form" hidden></div>
+  </main>
+</div>
+
+<div class="bank" id="viewBanque" hidden>
+  <p class="bank-intro">Banque de questions techniques à piocher selon le profil du candidat. Chaque réponse attendue est repliée : déplie-la pour voir les points à cocher. Niveaux : <b>JR</b> junior · <b>CF</b> confirmé · <b>SR</b> senior.</p>
+  <div class="techtabs" id="techtabs"></div>
+  <div id="techContent"></div>
+</div>
+
+<div class="saved-flash" id="flash">Enregistré</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nanoid/5.0.7/index.browser.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---- ID helper (fallback si nanoid indispo) ----
+  const uid = () => (window.nanoid ? window.nanoid(8) : "c" + Math.random().toString(36).slice(2, 10));
+
+  // ---- Trame : présentation (note libre) + cycle en V + soft skills ----
+  const INTRO = {
+    id: "intro",
+    title: "Présentation libre du candidat",
+    note: "Le candidat déroule son parcours ; on écoute et on prend des notes (pas de notation ici). Points à capter au fil de l'eau : fil conducteur et cohérence, part réelle vs « l'équipe », niveau d'énergie et de clarté, acquis techniques et contextes (métier, défense…), ce qu'il recherche aujourd'hui.",
+    prompts: [
+      "Présentez-vous : votre parcours, vos expériences marquantes, et ce que vous recherchez.",
+      "Relances si besoin : le projet dont vous êtes le plus fier ? votre rôle exact dedans ? pourquoi ce poste / ce changement maintenant ?"
+    ]
+  };
+
+  const TEMPLATE = [
+    {
+      id: "besoin",
+      title: "1 · Recueil du besoin & spécifications",
+      note: "Début du cycle en V. Comment il part d'un besoin flou pour arriver à quelque chose de spécifié et documenté.",
+      questions: [
+        { id: "b1", q: "On vous confie un nouveau besoin encore flou (client / PO). Comment le cadrez-vous avant d'écrire la moindre ligne de code ?",
+          e: "<b>Attendu :</b> pose des questions, reformule, identifie les cas limites et les contraintes, challenge le besoin. Ne fonce pas tête baissée." },
+        { id: "b2", q: "Comment traduisez-vous ce besoin en spécifications / en documentation exploitable par l'équipe ?",
+          e: "<b>Attendu :</b> user stories, critères d'acceptation, specs fonctionnelles/techniques, schémas. Doc vivante (wiki/Confluence), traçabilité besoin → dév." },
+        { id: "b3", q: "Comment estimez-vous la charge et découpez-vous le travail ?",
+          e: "<b>Attendu :</b> découpage en tâches/tickets, estimation (points, jours), priorisation. Agile (sprints, backlog) ou autre cadence. Lucide sur l'incertitude." }
+      ]
+    },
+    {
+      id: "conception",
+      title: "2 · Conception : architecture & choix techno",
+      note: "Phase de conception du V. Capacité à structurer avant de coder et à justifier ses choix.",
+      questions: [
+        { id: "c1", q: "Comment concevez-vous l'architecture d'une nouvelle application ou d'un nouveau module ? Un découpage que vous appréciez ?",
+          e: "<b>Attendu :</b> séparation des responsabilités (couches, hexagonale/clean, MVVM…), modularité, testabilité. Sait expliquer le POURQUOI, pas réciter des noms." },
+        { id: "c2", q: "Comment choisissez-vous une techno / un framework / une librairie pour un besoin donné ?",
+          e: "<b>Attendu :</b> critères (maturité, communauté, adéquation, maintenabilité, contraintes client/sécurité), pas de choix par mode. Sait arbitrer." },
+        { id: "c3", q: "Comment documentez-vous une décision d'architecture pour qu'elle reste compréhensible plus tard ?",
+          e: "<b>Attendu :</b> schémas, ADR / notes de décision, doc d'archi, diagrammes. Pense à ceux qui reprendront le code." }
+      ]
+    },
+    {
+      id: "dev",
+      title: "3 · Développement : techno & features d'exemple",
+      note: "Cœur du V. Vérifier le vécu réel du code, sur des exemples concrets. Adapter les questions à la stack du poste.",
+      questions: [
+        { id: "d1", q: "Déroulez UNE fonctionnalité que vous avez développée : le besoin, ce que VOUS avez codé, une difficulté rencontrée et comment vous l'avez levée.",
+          e: "<b>Attendu :</b> sa part réelle (vs « l'équipe »), clarté d'explication d'un problème technique. Le meilleur révélateur du savoir-faire réel." },
+        { id: "d2", q: "Sur votre langage/stack principal : qu'est-ce que vous maîtrisez bien, et qu'est-ce qui vous a posé des pièges ?",
+          e: "<b>Attendu :</b> fondamentaux solides (objet, async, gestion mémoire/erreurs selon la techno), lucidité sur ses limites. Honnêteté > exhaustivité." },
+        { id: "d3", q: "Comment garantissez-vous un code lisible et maintenable par les autres ? (conventions, revue, refacto)",
+          e: "<b>Attendu :</b> conventions, nommage, petites fonctions, commentaires utiles, revue de code (regarde quoi ?), refacto régulier. Pense équipe." },
+        { id: "d4", q: "Comment gérez-vous les dépendances, les versions et l'environnement d'un projet ?",
+          e: "<b>Attendu :</b> gestionnaire de dépendances, verrouillage de versions, reproductibilité (conteneurs), séparation des environnements. Hygiène pro." }
+      ]
+    },
+    {
+      id: "tests",
+      title: "4 · Tests & qualité",
+      note: "Remontée du V : on valide à chaque niveau. Vérifier que la qualité est un réflexe, pas une contrainte.",
+      questions: [
+        { id: "q1", q: "Comment organisez-vous vos tests ? (unitaires, intégration, bout-en-bout) Que testez-vous en priorité ?",
+          e: "<b>Attendu :</b> pyramide des tests (beaucoup d'unitaires, moins d'intégration, peu d'E2E). Distingue les niveaux, teste les cas limites. Du vécu." },
+        { id: "q2", q: "Qu'est-ce qu'un mock et quand l'utiliser ? Comment isolez-vous un test d'une dépendance externe ?",
+          e: "<b>Attendu :</b> simuler une dépendance (API, BDD) pour isoler, rendre rapide et déterministe. Sait distinguer ce qu'on mocke de ce qu'on teste." },
+        { id: "q3", q: "La couverture de code est-elle un bon indicateur ? Ses limites ? Comment suivez-vous la qualité ?",
+          e: "<b>Attendu :</b> utile mais pas suffisant (couvrir ≠ vérifier). Outils d'analyse statique (Sonar), quality gate, revue. Maturité appréciée." }
+      ]
+    },
+    {
+      id: "cicd",
+      title: "5 · CI/CD & livraison",
+      note: "Fin du cycle : industrialisation, du commit jusqu'à la mise en production.",
+      questions: [
+        { id: "i1", q: "Décrivez une chaîne CI/CD que vous avez utilisée ou mise en place, étape par étape.",
+          e: "<b>Attendu :</b> build → tests → analyse qualité → artefact → déploiement. Stages, runners, secrets, artefacts. Parle d'un vrai pipeline, pas de théorie." },
+        { id: "i2", q: "Comment se passe une livraison / une mise en production ? Comment gérez-vous un déploiement qui tourne mal ?",
+          e: "<b>Attendu :</b> versioning, environnements, stratégie de déploiement, rollback, validation avant prod. Conscience du risque et de la non-régression." },
+        { id: "i3", q: "Une fois livré : comment supervise-t-on l'application et traite-t-on les anomalies remontées ?",
+          e: "<b>Attendu :</b> logs, monitoring/alerting, circuit d'une anomalie (reproduire → qualifier → corriger → tester → non-régression). Vécu concret (outil de tickets)." }
+      ]
+    },
+    {
+      id: "soft",
+      title: "6 · Soft skills, équipe & posture",
+      note: "On quitte la technique : état d'esprit, collectif, adaptabilité, motivation.",
+      questions: [
+        { id: "s1", q: "Décrivez l'équipe dans laquelle vous vous épanouissez. Un contre-exemple vécu ?",
+          e: "<b>Attendu :</b> ce qu'il attend du collectif + capacité à s'adapter à des équipes variées (en régie, on ne choisit pas). « Bonne ambiance » = préférence, pas exigence rigide." },
+        { id: "s2", q: "Un exemple où vous avez dû composer avec les autres : désaccord, incompréhension, coup de main à demander ou donner ?",
+          e: "<b>Attendu :</b> maturité relationnelle, communication, humilité. Sait demander ET rendre service." },
+        { id: "s3", q: "En régie chez un client, on vous demande de faire autrement que ce que vous auriez choisi. Comment réagissez-vous ?",
+          e: "<b>Attendu :</b> argumente, écoute, puis se range (le client a le dernier mot). Ni « je m'en fiche », ni rigidité. Équilibre esprit critique / adaptabilité." },
+        { id: "s4", q: "Comment montez-vous en compétence sur une techno ou un domaine inconnus ?",
+          e: "<b>Attendu :</b> doc, code existant, référent, petit projet test, demande d'aide au bon moment. Autonome ET humble." },
+        { id: "s5", q: "Où vous voyez-vous dans 2-3 ans, et qu'est-ce qui vous motive (ou vous ferait partir) ?",
+          e: "<b>Attendu :</b> vision d'un parcours (pas un job d'attente), moteur réel, stabilité. Bon signe : attente d'accompagnement." }
+      ]
+    }
+  ];
+
+  const DECISIONS = { go: "Favorable", hold: "Réservé", nogo: "NOGO" };
+  const STAGES = ["RV1", "RV2", "RV3", "Finalisé"];
+  const MAX = TEMPLATE.length * 5;
+
+  // ---- State ----
+  let db = { candidates: [] };
+  let currentId = null;
+  const LS_KEY = "suivi-entretiens-dev-v1";   // conservé pour le thème uniquement
+
+  // ================= API =================
+  // URL de base de l'API. En déploiement, le front est servi par nginx qui
+  // proxifie /api vers le backend (même origine → pas de CORS).
+  const API = (window.API_BASE || "/api");
+  let authToken = null;
+  try { authToken = sessionStorage.getItem("suivi-token"); } catch (e) {}
+
+  function authHeaders(extra) {
+    return Object.assign(
+      { "Authorization": "Bearer " + authToken },
+      extra || {}
+    );
+  }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    const res = await fetch(API + path, Object.assign({}, opts, {
+      headers: Object.assign(
+        { "Content-Type": "application/json" },
+        authToken ? { "Authorization": "Bearer " + authToken } : {},
+        opts.headers || {}
+      )
+    }));
+    if (res.status === 401) { logout(); throw new Error("Session expirée"); }
+    if (!res.ok) throw new Error("Erreur API " + res.status);
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  // Charge les candidats depuis l'API. Chaque candidat renvoyé a la forme
+  // { id, name, role, stage, date, decision, comment, data:{scores,notes,info,intro} }
+  // On "aplatit" data vers le modèle attendu par le rendu existant.
+  async function load() {
+    const rows = await api("/candidates");
+    db.candidates = rows.map(flattenFromApi);
+  }
+
+  function flattenFromApi(row) {
+    const d = row.data || {};
+    return {
+      id: row.id, name: row.name, role: row.role, stage: row.stage,
+      date: row.date, decision: row.decision, comment: row.comment,
+      intro: d.intro || "", scores: d.scores || {}, notes: d.notes || {},
+      info: d.info || {}
+    };
+  }
+
+  function toApiPayload(c) {
+    return {
+      name: c.name || "", role: c.role || "", stage: c.stage || "RV2",
+      date: c.date || "", decision: c.decision || "", comment: c.comment || "",
+      data: { intro: c.intro || "", scores: c.scores || {},
+              notes: c.notes || {}, info: c.info || {} }
+    };
+  }
+
+  // Sauvegarde "debouncée" : on évite d'appeler l'API à chaque frappe.
+  let flashT, saveT;
+  function save(flash) {
+    const c = db.candidates.find(x => x.id === currentId);
+    if (c) {
+      clearTimeout(saveT);
+      saveT = setTimeout(() => {
+        api("/candidates/" + c.id, { method: "PUT", body: JSON.stringify(toApiPayload(c)) })
+          .catch(() => {});
+      }, 400);
+    }
+    if (flash) {
+      const f = document.getElementById("flash");
+      f.classList.add("show");
+      clearTimeout(flashT);
+      flashT = setTimeout(() => f.classList.remove("show"), 1100);
+    }
+  }
+
+  function blankCandidate() {
+    return {
+      id: uid(),
+      name: "",
+      role: "",
+      stage: "RV2",
+      date: new Date().toISOString().slice(0, 10),
+      intro: "",
+      scores: {},     // blockId -> 1..5
+      notes: {},      // questionId -> texte
+      info: {},       // salaire, dispo, mobilite, permis, process, codingame...
+      decision: "",   // go|hold|nogo|""
+      comment: ""
+    };
+  }
+
+  const INFO_FIELDS = [
+    { id: "salaire", label: "Prétentions salariales", ph: "ex. 40 K€ brut / an" },
+    { id: "dispo", label: "Disponibilité", ph: "ex. mi-janvier, préavis 1 mois…" },
+    { id: "mobilite", label: "Mobilité", ph: "ex. Toulon, Sud-Est, toute la France…" },
+    { id: "permis", label: "Permis & véhicule", ph: "ex. Permis B + véhiculé" },
+    { id: "process", label: "Autres process en cours", ph: "ex. Akkodis (RV2), Eviden…" },
+    { id: "codingame", label: "CodinGame / test technique", ph: "ex. Fait — 820 pts / non fait" }
+  ];
+
+  function candTotal(c) {
+    return TEMPLATE.reduce((s, b) => s + (Number(c.scores[b.id]) || 0), 0);
+  }
+  function blockScore(c, b) {
+    const v = Number(c.scores[b.id]) || 0;
+    return v;
+  }
+
+  // ---- Rendu liste ----
+  function renderList() {
+    const q = document.getElementById("search").value.trim().toLowerCase();
+    const list = document.getElementById("candList");
+    const empty = document.getElementById("emptySide");
+    list.innerHTML = "";
+    const items = db.candidates
+      .filter(c => !q || (c.name + " " + c.role).toLowerCase().includes(q))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    empty.hidden = db.candidates.length !== 0;
+    items.forEach(c => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.className = "cand" + (c.id === currentId ? " active" : "");
+      btn.onclick = () => select(c.id);
+      const dClass = c.decision || "todo";
+      const dLabel = c.decision ? DECISIONS[c.decision] : (c.stage || "—");
+      btn.innerHTML =
+        '<span class="name">' + (escapeHtml(c.name) || "<em>Sans nom</em>") + '</span>' +
+        '<span class="meta">' +
+          '<span>' + escapeHtml(c.role || "Dév") + '</span>' +
+          '<span class="pill ' + dClass + '">' + escapeHtml(dLabel) + '</span>' +
+        '</span>' +
+        '<span class="meta">' +
+          '<span>' + escapeHtml(c.date || "") + '</span>' +
+          '<span class="score">' + candTotal(c) + '/' + MAX + '</span>' +
+        '</span>';
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, m =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+  }
+
+  // ---- Rendu formulaire ----
+  function renderForm() {
+    const c = db.candidates.find(x => x.id === currentId);
+    const form = document.getElementById("form");
+    const emptyP = document.getElementById("panelEmpty");
+    if (!c) { form.hidden = true; emptyP.hidden = false; return; }
+    emptyP.hidden = true; form.hidden = false;
+
+    let html = "";
+    // header champs
+    html += '<div class="cand-head">';
+    html += headField("Nom du candidat", '<input id="f-name" class="" type="text" value="' + escapeHtml(c.name) + '" placeholder="Prénom Nom">', "grow");
+    html += headField("Poste / profil", '<input id="f-role" type="text" value="' + escapeHtml(c.role) + '" placeholder="Dév Java junior">');
+    html += headField("Étape", selectEl("f-stage", STAGES, c.stage));
+    html += headField("Date", '<input id="f-date" type="date" value="' + escapeHtml(c.date) + '">');
+    html += '</div>';
+
+    // scorebar
+    const total = candTotal(c);
+    const pct = Math.round((total / MAX) * 100);
+    html += '<div class="scorebar">' +
+      '<div><div class="label">Score global</div><div class="total">' + total + '<small>/' + MAX + '</small></div></div>' +
+      '<div class="track"><span id="track-fill" style="width:' + pct + '%"></span></div>' +
+      '<div><div class="label">Décision</div><div id="dec-echo">' + (c.decision ? DECISIONS[c.decision] : "—") + '</div></div>' +
+      '</div>';
+
+    // bloc présentation (note libre, pas de /5)
+    html += '<details class="block" open>' +
+      '<summary><span class="chev">▶</span>' + escapeHtml(INTRO.title) +
+      '<span class="bscore">libre</span></summary>' +
+      '<div class="block-body">' +
+      '<div class="block-note">' + escapeHtml(INTRO.note) + '</div>';
+    INTRO.prompts.forEach(p => {
+      html += '<div class="q"><div class="qtext">' + escapeHtml(p) + '</div></div>';
+    });
+    html += '<div class="q"><textarea id="intro-notes" placeholder="Notes de présentation…">' +
+      escapeHtml(c.intro || "") + '</textarea></div>';
+    html += '</div></details>';
+
+    // blocs
+    TEMPLATE.forEach(b => {
+      const bs = blockScore(c, b);
+      html += '<details class="block"' + '>' +
+        '<summary><span class="chev">▶</span>' + escapeHtml(b.title) +
+        '<span class="bscore" id="bscore-' + b.id + '">' + (bs ? bs + "/5" : "– /5") + '</span></summary>' +
+        '<div class="block-body">';
+      html += '<div class="block-note">' + escapeHtml(b.note) + '</div>';
+      b.questions.forEach(qq => {
+        const val = c.notes[qq.id] || "";
+        html += '<div class="q">' +
+          '<div class="qtext">' + escapeHtml(qq.q) + '</div>' +
+          '<div class="expect">' + qq.e + '</div>' +
+          '<textarea id="note-' + qq.id + '" data-q="' + qq.id + '" placeholder="Notes…">' + escapeHtml(val) + '</textarea>' +
+          '</div>';
+      });
+      // rating bloc
+      html += '<div class="rating" data-block="' + b.id + '"><span class="rlabel">Note du bloc</span>';
+      for (let i = 1; i <= 5; i++) {
+        html += '<button class="dot' + (bs === i ? " on" : "") + '" data-score="' + i + '">' + i + '</button>';
+      }
+      html += '<button class="dot clear" data-score="0">✕</button>';
+      html += '</div>';
+      html += '</div></details>';
+    });
+
+    // infos pratiques
+    html += '<details class="block" id="info-block">' +
+      '<summary><span class="chev">▶</span>Informations pratiques' +
+      '<span class="bscore">infos</span></summary>' +
+      '<div class="block-body"><div class="info-grid">';
+    INFO_FIELDS.forEach(f => {
+      html += '<div class="info-f"><label>' + escapeHtml(f.label) + '</label>' +
+        '<input type="text" id="info-' + f.id + '" value="' + escapeHtml((c.info && c.info[f.id]) || "") +
+        '" placeholder="' + escapeHtml(f.ph) + '"></div>';
+    });
+    html += '</div></div></details>';
+
+    // synthèse finale
+    html += '<div class="final">';
+    html += '<div><label class="flabel">Décision</label><div class="decision" id="decision">';
+    ["go", "hold", "nogo"].forEach(d => {
+      html += '<button data-d="' + d + '"' + (c.decision === d ? ' class="on"' : "") + '>' + DECISIONS[d] + '</button>';
+    });
+    html += '</div></div>';
+    html += '<div><label class="flabel" for="f-comment">Commentaire final</label>' +
+      '<textarea id="f-comment" placeholder="Synthèse, points forts, points de vigilance…">' + escapeHtml(c.comment) + '</textarea></div>';
+    html += '<div class="row-actions">' +
+      '<button id="dupBtn">Dupliquer</button>' +
+      '<button id="copyBtn">Copier la synthèse</button>' +
+      '<button id="delBtn" class="danger">Supprimer</button>' +
+      '</div>';
+    html += '</div>';
+
+    form.innerHTML = html;
+    wireForm(c);
+  }
+
+  function headField(label, inner, cls) {
+    return '<div class="f ' + (cls || "") + '"><label>' + escapeHtml(label) + '</label>' + inner + '</div>';
+  }
+  function selectEl(id, opts, val) {
+    return '<select id="' + id + '">' + opts.map(o =>
+      '<option value="' + escapeHtml(o) + '"' + (o === val ? " selected" : "") + '>' + escapeHtml(o) + '</option>').join("") + '</select>';
+  }
+
+  function wireForm(c) {
+    const bind = (id, prop, ev) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener(ev || "input", () => {
+        c[prop] = el.value;
+        if (prop === "name" || prop === "role" || prop === "stage" || prop === "date") renderList();
+        save(true);
+      });
+    };
+    bind("f-name", "name"); bind("f-role", "role");
+    bind("f-stage", "stage", "change"); bind("f-date", "date", "change");
+    bind("f-comment", "comment");
+
+    const introEl = document.getElementById("intro-notes");
+    if (introEl) introEl.addEventListener("input", () => { c.intro = introEl.value; save(true); });
+
+    INFO_FIELDS.forEach(f => {
+      const el = document.getElementById("info-" + f.id);
+      if (!el) return;
+      el.addEventListener("input", () => {
+        if (!c.info) c.info = {};
+        c.info[f.id] = el.value;
+        save(true);
+      });
+    });
+
+    // notes
+    document.querySelectorAll("textarea[data-q]").forEach(t => {
+      t.addEventListener("input", () => {
+        c.notes[t.dataset.q] = t.value;
+        save(true);
+      });
+    });
+
+    // ratings
+    document.querySelectorAll(".rating").forEach(r => {
+      const bid = r.dataset.block;
+      r.querySelectorAll(".dot").forEach(dot => {
+        dot.addEventListener("click", () => {
+          const sc = Number(dot.dataset.score);
+          if (sc === 0) delete c.scores[bid]; else c.scores[bid] = sc;
+          r.querySelectorAll(".dot").forEach(d2 => {
+            const v = Number(d2.dataset.score);
+            d2.classList.toggle("on", v !== 0 && c.scores[bid] === v);
+          });
+          const bs = Number(c.scores[bid]) || 0;
+          const badge = document.getElementById("bscore-" + bid);
+          if (badge) badge.textContent = bs ? bs + "/5" : "– /5";
+          refreshTotals(c);
+          renderList();
+          save(true);
+        });
+      });
+    });
+
+    // decision
+    document.querySelectorAll("#decision button").forEach(b => {
+      b.addEventListener("click", () => {
+        c.decision = (c.decision === b.dataset.d) ? "" : b.dataset.d;
+        document.querySelectorAll("#decision button").forEach(x =>
+          x.classList.toggle("on", x.dataset.d === c.decision));
+        document.getElementById("dec-echo").textContent = c.decision ? DECISIONS[c.decision] : "—";
+        renderList();
+        save(true);
+      });
+    });
+
+    document.getElementById("delBtn").addEventListener("click", async () => {
+      if (window.__confirmDel === c.id) {
+        window.__confirmDel = null;
+        try { await api("/candidates/" + c.id, { method: "DELETE" }); } catch (e) {}
+        db.candidates = db.candidates.filter(x => x.id !== c.id);
+        currentId = db.candidates[0] ? db.candidates[0].id : null;
+        renderAll();
+      } else {
+        window.__confirmDel = c.id;
+        const btn = document.getElementById("delBtn");
+        btn.textContent = "Confirmer la suppression ?";
+        setTimeout(() => { if (window.__confirmDel === c.id) { window.__confirmDel = null; btn.textContent = "Supprimer"; } }, 3000);
+      }
+    });
+    document.getElementById("dupBtn").addEventListener("click", async () => {
+      const copy = JSON.parse(JSON.stringify(c));
+      copy.name = (c.name || "Candidat") + " (copie)";
+      try {
+        const created = flattenFromApi(await api("/candidates", {
+          method: "POST", body: JSON.stringify(toApiPayload(copy))
+        }));
+        db.candidates.unshift(created);
+        currentId = created.id;
+        renderAll();
+      } catch (e) {}
+    });
+    document.getElementById("copyBtn").addEventListener("click", () => copySynthesis(c));
+  }
+
+  function refreshTotals(c) {
+    const total = candTotal(c);
+    const pct = Math.round((total / MAX) * 100);
+    const t = document.querySelector(".scorebar .total");
+    if (t) t.innerHTML = total + '<small>/' + MAX + '</small>';
+    const fill = document.getElementById("track-fill");
+    if (fill) fill.style.width = pct + "%";
+  }
+
+  function copySynthesis(c) {
+    let txt = "SYNTHÈSE ENTRETIEN — " + (c.name || "Candidat") + "\n";
+    txt += (c.role || "") + "  ·  " + (c.stage || "") + "  ·  " + (c.date || "") + "\n";
+    txt += "Score : " + candTotal(c) + "/" + MAX + "\n\n";
+    if ((c.intro || "").trim()) {
+      txt += "PRÉSENTATION\n  " + c.intro.trim().replace(/\n/g, "\n  ") + "\n\n";
+    }
+    TEMPLATE.forEach(b => {
+      const bs = Number(c.scores[b.id]) || 0;
+      txt += b.title + "  [" + (bs ? bs + "/5" : "–/5") + "]\n";
+      b.questions.forEach(qq => {
+        const n = (c.notes[qq.id] || "").trim();
+        if (n) txt += "  • " + n.replace(/\n/g, " ") + "\n";
+      });
+      txt += "\n";
+    });
+    const infoLines = INFO_FIELDS
+      .filter(f => c.info && (c.info[f.id] || "").trim())
+      .map(f => "  • " + f.label + " : " + c.info[f.id].trim());
+    if (infoLines.length) txt += "INFOS PRATIQUES\n" + infoLines.join("\n") + "\n\n";
+
+    txt += "DÉCISION : " + (c.decision ? DECISIONS[c.decision] : "—") + "\n";
+    if ((c.comment || "").trim()) txt += "\n" + c.comment.trim() + "\n";
+
+    const btn = document.getElementById("copyBtn");
+    const done = () => { btn.textContent = "Copié ✓"; setTimeout(() => btn.textContent = "Copier la synthèse", 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done).catch(() => fallbackCopy(txt, done));
+    } else fallbackCopy(txt, done);
+  }
+  function fallbackCopy(txt, done) {
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  // ---- Navigation ----
+  function select(id) {
+    currentId = id;
+    window.__confirmDel = null;
+    renderList();
+    renderForm();
+    if (window.matchMedia("(max-width:760px)").matches) {
+      document.getElementById("sidebar").classList.add("collapsed-mobile");
+      document.getElementById("panel").classList.remove("hidden-mobile");
+    }
+  }
+  function renderAll() { renderList(); renderForm(); }
+
+  // ---- Boutons globaux ----
+  document.getElementById("newBtn").addEventListener("click", async () => {
+    const c = blankCandidate();
+    try {
+      const created = flattenFromApi(await api("/candidates", {
+        method: "POST", body: JSON.stringify(toApiPayload(c))
+      }));
+      db.candidates.unshift(created);
+      currentId = created.id;
+      renderAll();
+      setTimeout(() => { const n = document.getElementById("f-name"); if (n) n.focus(); }, 30);
+    } catch (e) {}
+  });
+  document.getElementById("search").addEventListener("input", renderList);
+  document.getElementById("backBtn").addEventListener("click", () => {
+    document.getElementById("sidebar").classList.remove("collapsed-mobile");
+    document.getElementById("panel").classList.add("hidden-mobile");
+  });
+
+  // ---- Déconnexion ----
+  function logout() {
+    authToken = null;
+    try { sessionStorage.removeItem("suivi-token"); } catch (e) {}
+    db.candidates = []; currentId = null;
+    showLogin();
+  }
+  document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  // thème
+  const themeBtn = document.getElementById("themeBtn");
+  function applyTheme(t) {
+    if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+    try { localStorage.setItem(LS_KEY + "-theme", t); } catch (e) {}
+  }
+  let themePref = "system";
+  try { themePref = localStorage.getItem(LS_KEY + "-theme") || "system"; } catch (e) {}
+  applyTheme(themePref);
+  themeBtn.addEventListener("click", () => {
+    themePref = themePref === "system" ? "light" : themePref === "light" ? "dark" : "system";
+    applyTheme(themePref);
+    themeBtn.title = "Thème : " + themePref;
+  });
+
+  // ======================================================================
+  //  BANQUE DE QUESTIONS TECHNIQUES
+  //  lv : "jr" junior · "cf" confirmé · "sr" senior
+  // ======================================================================
+  const BANK = [
+    {
+      id: "java", label: "Java / Spring",
+      desc: "Langage objet et écosystème Spring Boot — socle des missions défense/industrie.",
+      items: [
+        { lv: "jr", q: "Différence entre == et .equals() en Java ?",
+          a: "<b>==</b> compare les références (même objet en mémoire) ; <b>.equals()</b> compare le contenu/la valeur. Piège : cache des Integer (-128 à 127). Il faut redéfinir equals() ET hashCode() ensemble." },
+        { lv: "jr", q: "Interface vs classe abstraite ?",
+          a: "Classe abstraite : méthodes implémentées + attributs, héritage simple. Interface : contrat, implémentation multiple. Depuis Java 8, méthodes default possibles dans une interface." },
+        { lv: "jr", q: "Qu'est-ce qu'une NullPointerException et comment l'éviter ?",
+          a: "Appel d'une méthode/attribut sur une référence null. Prévention : vérifications, Optional, initialisation correcte, @NonNull." },
+        { lv: "cf", q: "À quoi sert l'injection de dépendances dans Spring ?",
+          a: "Inversion de contrôle : le conteneur crée et injecte les dépendances → découplage, testabilité (on injecte des mocks), gestion du cycle de vie des beans." },
+        { lv: "cf", q: "Pièges de @Transactional ?",
+          a: "Rollback uniquement sur RuntimeException par défaut. Self-invocation (appel interne) qui bypasse le proxy. Pas d'effet sur méthode privée. Portée trop large = verrous longs." },
+        { lv: "cf", q: "Qu'apportent les versions récentes de Java (17/21) ?",
+          a: "Records, sealed classes, pattern matching, switch expressions, text blocks, virtual threads (21). Distinguer « lu » de « utilisé »." },
+        { lv: "sr", q: "Problème N+1 avec Hibernate/JPA et solutions ?",
+          a: "Une requête par entité liée au lieu d'une jointure → explosion du nombre de requêtes. Solutions : fetch join (JPQL), @EntityGraph, batch size, lazy/eager pensé." },
+        { lv: "sr", q: "Spring Boot 2 vs 3 ?",
+          a: "Jakarta EE (javax → jakarta), Java 17 minimum, support GraalVM natif, observabilité via Micrometer. Bon signe : cite une migration réelle." },
+        { lv: "sr", q: "Structure d'un batch (Spring Batch) sur gros volume ?",
+          a: "Job → Step → Reader/Processor/Writer, chunk processing, commit interval, gestion skip/retry, restart. Doit être concret." }
+      ]
+    },
+    {
+      id: "python", label: "Python",
+      desc: "Scripting, automatisation, data et back-end (FastAPI).",
+      items: [
+        { lv: "jr", q: "Mutable vs immuable ? Un piège courant ?",
+          a: "Immuables : int, str, tuple. Mutables : list, dict, set. Piège classique : argument par défaut mutable def f(x=[]) partagé entre appels." },
+        { lv: "jr", q: "Qu'est-ce qu'une list comprehension ?",
+          a: "Syntaxe concise pour construire une liste : [x*2 for x in items if cond]. Plus lisible et souvent plus rapide qu'une boucle explicite." },
+        { lv: "cf", q: "Qu'est-ce que le GIL et son impact ?",
+          a: "Global Interpreter Lock : un seul thread exécute du bytecode à la fois. Le threading n'accélère pas le CPU-bound (→ multiprocessing). Utile pour l'I/O-bound (threads/asyncio)." },
+        { lv: "cf", q: "À quoi servent les générateurs (yield) ?",
+          a: "Itération paresseuse : produit les valeurs une par une sans tout charger en mémoire. Clé pour traiter de gros volumes de données." },
+        { lv: "cf", q: "Comment gérez-vous dépendances et environnements ?",
+          a: "venv/virtualenv, requirements.txt ou pyproject/poetry, pip, verrouillage de versions, reproductibilité (Docker)." },
+        { lv: "sr", q: "Traiter un fichier trop gros pour la mémoire ?",
+          a: "Lecture par flux/chunks, générateurs, traitement ligne à ligne, pandas chunksize, streaming. Notion de ne jamais tout charger." },
+        { lv: "sr", q: "Sync vs async (FastAPI) : quand l'un plutôt que l'autre ?",
+          a: "Async pour l'I/O-bound (réseau, DB, beaucoup de connexions simultanées). Sync suffit pour du CPU-bound simple. FastAPI : async natif, validation Pydantic, doc auto OpenAPI." }
+      ]
+    },
+    {
+      id: "c", label: "C / C++",
+      desc: "Bas niveau, embarqué, gestion mémoire manuelle.",
+      items: [
+        { lv: "jr", q: "Qu'est-ce qu'un pointeur ?",
+          a: "Variable qui stocke l'adresse mémoire d'une autre variable. & récupère l'adresse, * déréférence (accède à la valeur pointée)." },
+        { lv: "jr", q: "Différence pile (stack) et tas (heap) ?",
+          a: "Pile : variables locales, gérée automatiquement (LIFO), rapide, limitée. Tas : allocation dynamique (malloc), gérée manuellement, plus grand, plus lent." },
+        { lv: "jr", q: "Que se passe-t-il si on oublie free() ? Et un accès hors limites ?",
+          a: "free oublié → fuite mémoire. Accès hors limites → comportement indéfini (corruption, crash, faille type buffer overflow)." },
+        { lv: "cf", q: "Passage par valeur vs par référence en C ?",
+          a: "C passe par valeur par défaut. Pour modifier une variable dans une fonction, on passe son adresse (&var) et on manipule via un pointeur (ex. swap)." },
+        { lv: "cf", q: "Différence entre ++i et i++ ?",
+          a: "Les deux incrémentent. ++i renvoie la valeur après incrément (pré) ; i++ renvoie la valeur avant (post). Visible quand utilisé dans une expression." },
+        { lv: "sr", q: "Qu'est-ce qu'un pointeur pendant (dangling) et un double free ?",
+          a: "Dangling : pointeur vers une zone déjà libérée → UB si déréférencé. Double free : libérer deux fois la même zone → corruption du tas. Bonne pratique : ptr = NULL après free." },
+        { lv: "sr", q: "À quoi sert le mot-clé volatile ?",
+          a: "Indique au compilateur que la variable peut changer hors du flux normal (registre matériel, interruption, autre thread) → empêche certaines optimisations/caches. Clé en embarqué." }
+      ]
+    },
+    {
+      id: "docker", label: "Docker / Kubernetes",
+      desc: "Conteneurisation et orchestration — industrialisation des déploiements.",
+      items: [
+        { lv: "jr", q: "Différence image / conteneur ?",
+          a: "Image : modèle en lecture seule (couches), le « moule ». Conteneur : instance en exécution de cette image, avec une couche d'écriture. D'une image on lance plusieurs conteneurs." },
+        { lv: "jr", q: "À quoi sert un volume Docker ?",
+          a: "Persister des données au-delà de la vie du conteneur (éphémère par nature). La couche d'écriture du conteneur disparaît à sa suppression." },
+        { lv: "cf", q: "Intérêt d'un multi-stage build ?",
+          a: "Séparer l'environnement de build de celui d'exécution : on compile dans une image lourde, on copie l'artefact dans une image légère. Image finale plus petite et plus sûre." },
+        { lv: "cf", q: "Comment réduire la taille et sécuriser une image ?",
+          a: "Base slim/alpine, multi-stage, .dockerignore, moins de couches, utilisateur non-root, pas de secrets embarqués, dépendances en cache." },
+        { lv: "cf", q: "Pod, Deployment, Service en Kubernetes ?",
+          a: "Pod : plus petite unité déployable (un/plusieurs conteneurs). Deployment : gère les réplicas, les rolling updates, l'auto-réparation. Service : expose les pods de façon stable (ClusterIP/NodePort/LoadBalancer)." },
+        { lv: "sr", q: "Comment gérez-vous les secrets et la configuration ?",
+          a: "Variables d'env pour la config ; secrets via Vault, Secrets K8s, pas en clair dans l'image. ConfigMap pour la conf non sensible. Injection à l'exécution." },
+        { lv: "sr", q: "k3s vs k8s complet : quand et pourquoi ?",
+          a: "k3s = distribution légère (single binary, faible empreinte), idéale homelab/edge/petites infra. k8s complet pour la production à l'échelle. Enjeux : réseau, stockage persistant, ingress." }
+      ]
+    },
+    {
+      id: "linux", label: "Linux",
+      desc: "Ligne de commande, administration système, diagnostic — socle des serveurs et de l'embarqué.",
+      items: [
+        { lv: "jr", q: "Comment naviguer et manipuler des fichiers en ligne de commande ?",
+          a: "cd / ls / pwd pour naviguer ; cp, mv, rm, mkdir pour manipuler ; cat, less, head, tail pour lire. Chemins absolus vs relatifs (~ = home)." },
+        { lv: "jr", q: "À quoi servent les permissions (chmod, chown) ?",
+          a: "Droits lecture/écriture/exécution (rwx) pour propriétaire/groupe/autres. chmod change les droits (ex. 755), chown change le propriétaire. Notation octale ou symbolique." },
+        { lv: "jr", q: "Comment rechercher un fichier ou du texte ?",
+          a: "find pour chercher des fichiers (par nom, taille, date) ; grep pour chercher du texte dans des fichiers (grep -r pour récursif). Bonus : combinaison avec des pipes." },
+        { lv: "cf", q: "Qu'est-ce qu'un pipe et une redirection ?",
+          a: "Pipe | : passe la sortie d'une commande en entrée d'une autre (ps aux | grep java). Redirections : > (écrase), >> (ajoute), 2> (erreurs), < (entrée)." },
+        { lv: "cf", q: "Comment diagnostiquer un process qui consomme trop de CPU/RAM ?",
+          a: "top/htop pour voir les process, ps aux, free -h pour la RAM, df -h / du pour le disque. Identifier le PID, puis logs (journalctl, /var/log). Démarche méthodique." },
+        { lv: "cf", q: "Comment gérer les process et les services ?",
+          a: "ps, kill/killall (signaux : SIGTERM, SIGKILL), jobs/bg/fg, nohup/&. Services : systemctl start/stop/status/enable, journalctl -u pour les logs d'un service." },
+        { lv: "sr", q: "Qu'est-ce qu'une variable d'environnement et le PATH ?",
+          a: "Variables disponibles pour les process (export VAR=val). PATH : liste des dossiers où le shell cherche les exécutables. Config dans .bashrc/.profile. Clé pour les outils et la CI." },
+        { lv: "sr", q: "Comment planifier une tâche récurrente ?",
+          a: "cron (crontab -e) avec la syntaxe minute/heure/jour/mois/jour-semaine, ou timers systemd. Pour une exécution unique : at. Logs et redirections pour tracer." }
+      ]
+    },
+    {
+      id: "git", label: "Git",
+      desc: "Gestion de versions et travail collaboratif — indispensable en équipe.",
+      items: [
+        { lv: "jr", q: "Quel est le cycle de base d'un commit ?",
+          a: "Modifier → git add (staging) → git commit (-m message) → git push. git status pour voir l'état, git diff pour voir les changements. Distinction working dir / index / dépôt." },
+        { lv: "jr", q: "À quoi sert une branche ?",
+          a: "Travailler sur une fonctionnalité isolée sans toucher la branche principale. git branch / git checkout (ou switch) / git merge. Permet le travail en parallèle." },
+        { lv: "jr", q: "Différence entre git fetch et git pull ?",
+          a: "fetch récupère les changements distants sans les intégrer. pull = fetch + merge (intègre directement dans la branche locale). Bon réflexe : fetch pour inspecter avant." },
+        { lv: "cf", q: "Comment résolvez-vous un conflit de merge ?",
+          a: "Git marque les zones en conflit (<<<< ==== >>>>). On choisit/combine manuellement, on retire les marqueurs, git add puis commit. Outils de merge possibles. Communiquer avec l'auteur de l'autre côté." },
+        { lv: "cf", q: "merge vs rebase : quelle différence, quand utiliser ?",
+          a: "merge conserve l'historique (commit de fusion). rebase réécrit l'historique en rejouant les commits → historique linéaire. Règle d'or : ne jamais rebase une branche partagée/publique." },
+        { lv: "cf", q: "Qu'est-ce qu'une Pull/Merge Request et à quoi sert la revue ?",
+          a: "Proposer l'intégration d'une branche, avec revue de code avant merge : lisibilité, tests, conventions, sécurité. Point de contrôle qualité et de partage de connaissance." },
+        { lv: "sr", q: "Comment annuler des changements selon la situation ?",
+          a: "git revert (annule un commit en créant un nouveau, sûr pour l'historique partagé), git reset (déplace HEAD, --soft/--mixed/--hard, à éviter sur du public), git restore pour un fichier. git reflog pour rattraper." },
+        { lv: "sr", q: "Quelle stratégie de branches / workflow connaissez-vous ?",
+          a: "GitFlow (develop/feature/release/hotfix), GitHub Flow (branches courtes + PR), trunk-based (commits fréquents sur main). Savoir adapter au contexte et à la cadence de l'équipe." }
+      ]
+    },
+    {
+      id: "devops", label: "CI/CD & DevOps",
+      desc: "Chaîne d'intégration et de livraison, qualité, supervision.",
+      items: [
+        { lv: "jr", q: "Qu'apporte la CI (intégration continue) ?",
+          a: "À chaque modification : build + tests automatiques → on détecte vite ce qui casse, on sécurise l'intégration. Base : éviter le « ça marche chez moi »." },
+        { lv: "jr", q: "Test unitaire vs test d'intégration ?",
+          a: "Unitaire : une fonction/classe isolée (mocks), rapide. Intégration : plusieurs composants ensemble (DB, API). Pyramide : beaucoup d'unitaires, moins d'intégration, peu d'E2E." },
+        { lv: "cf", q: "Décrivez les étapes d'un pipeline CI/CD.",
+          a: "Build → tests → analyse qualité (Sonar, quality gate) → packaging/artefact (registry, Artifactory) → déploiement. Stages, runners, secrets, artefacts entre jobs." },
+        { lv: "cf", q: "Qu'est-ce qu'un mock et quand l'utiliser ?",
+          a: "Simuler une dépendance externe (API, DB) pour isoler le test, le rendre rapide et déterministe. Distinguer ce qu'on mocke de ce qu'on teste." },
+        { lv: "cf", q: "La couverture de code est-elle un bon indicateur ?",
+          a: "Utile mais insuffisant : 80 % de lignes couvertes ≠ 80 % des cas testés. On peut couvrir sans vérifier le comportement. À coupler avec revue et analyse statique." },
+        { lv: "sr", q: "Comment gérez-vous un déploiement qui tourne mal en prod ?",
+          a: "Stratégie de déploiement (blue/green, canary, rolling), rollback rapide, versioning, validation avant prod, health checks. Conscience du risque et de la non-régression." },
+        { lv: "sr", q: "Comment supervise-t-on une application en production ?",
+          a: "Logs centralisés, métriques (Prometheus/Grafana), alerting, health checks (liveness/readiness). Circuit d'anomalie : reproduire → qualifier → corriger → tester → non-régression." }
+      ]
+    }
+  ];
+
+  let currentTech = BANK[0].id;
+  function renderBank() {
+    const tabs = document.getElementById("techtabs");
+    tabs.innerHTML = "";
+    BANK.forEach(t => {
+      const b = document.createElement("button");
+      b.textContent = t.label;
+      b.className = t.id === currentTech ? "on" : "";
+      b.onclick = () => { currentTech = t.id; renderBank(); };
+      tabs.appendChild(b);
+    });
+    const t = BANK.find(x => x.id === currentTech) || BANK[0];
+    const lvLabel = { jr: "JR", cf: "CF", sr: "SR" };
+    let html = '<div class="tech-head"><h2>' + escapeHtml(t.label) + '</h2>' +
+      '<span class="lv">' + t.items.length + ' questions</span></div>' +
+      '<p class="tech-desc">' + escapeHtml(t.desc) + '</p>';
+    t.items.forEach(it => {
+      html += '<details class="qa">' +
+        '<summary><span class="lv ' + it.lv + '">' + lvLabel[it.lv] + '</span>' +
+        '<span>' + escapeHtml(it.q) + '</span></summary>' +
+        '<div class="ans">' + it.a + '</div></details>';
+    });
+    document.getElementById("techContent").innerHTML = html;
+  }
+
+  // ---- bascule d'onglet ----
+  let currentTab = "entretiens";
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+    document.getElementById("viewEntretiens").hidden = tab !== "entretiens";
+    document.getElementById("viewBanque").hidden = tab !== "banque";
+    document.getElementById("newBtn").hidden = tab !== "entretiens";
+    document.getElementById("backBtn").style.display = "";
+    if (tab === "banque") renderBank();
+  }
+  document.querySelectorAll("#tabs button").forEach(b =>
+    b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+  // ================= LOGIN / ADMIN / INIT =================
+  let currentUser = null;
+
+  const appChrome = () => [
+    document.querySelector(".topbar"),
+  ];
+
+  function showLogin() {
+    document.getElementById("loginView").hidden = false;
+    document.getElementById("adminView").hidden = true;
+    document.getElementById("viewEntretiens").hidden = true;
+    document.getElementById("viewBanque").hidden = true;
+    document.querySelector(".topbar").style.display = "none";
+    setTimeout(() => { const e = document.getElementById("loginEmail"); if (e) e.focus(); }, 30);
+  }
+
+  function showApp() {
+    document.getElementById("loginView").hidden = true;
+    document.getElementById("adminView").hidden = true;
+    document.querySelector(".topbar").style.display = "";
+    // bouton "Comptes" visible seulement pour les admins
+    document.getElementById("adminBtn").hidden = !(currentUser && currentUser.is_admin);
+    setTab("entretiens");
+  }
+
+  function showAdmin() {
+    document.getElementById("adminView").hidden = false;
+    document.getElementById("viewEntretiens").hidden = true;
+    document.getElementById("viewBanque").hidden = true;
+    loadUsers();
+  }
+
+  async function loadUsers() {
+    const ul = document.getElementById("userList");
+    ul.innerHTML = "";
+    try {
+      const users = await api("/users");
+      users.forEach(u => {
+        const li = document.createElement("li");
+        li.style.cssText = "display:flex;align-items:center;gap:.6rem;border:1px solid var(--line);border-radius:8px;padding:.5rem .7rem;background:var(--surface);";
+        li.innerHTML = '<span style="flex:1;font-size:.85rem;">' + escapeHtml(u.email) +
+          (u.is_admin ? ' <span class="pill go" style="margin-left:.3rem;">admin</span>' : '') + '</span>';
+        if (!(currentUser && u.email === currentUser.email)) {
+          const del = document.createElement("button");
+          del.textContent = "Supprimer";
+          del.style.cssText = "border:1px solid var(--line);background:var(--surface-2);color:var(--fg);border-radius:7px;padding:.3rem .6rem;font-size:.78rem;cursor:pointer;";
+          del.onclick = async () => {
+            if (!confirm("Supprimer le compte " + u.email + " ?")) return;
+            try { await api("/users/" + u.id, { method: "DELETE" }); loadUsers(); } catch (e) {}
+          };
+          li.appendChild(del);
+        }
+        ul.appendChild(li);
+      });
+    } catch (e) {}
+  }
+
+  // Login : l'API attend le format OAuth2 (form-urlencoded), pas du JSON.
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = document.getElementById("loginError");
+    err.textContent = "";
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    try {
+      const body = new URLSearchParams({ username: email, password });
+      const res = await fetch(API + "/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body
+      });
+      if (!res.ok) { err.textContent = "Email ou mot de passe incorrect."; return; }
+      const data = await res.json();
+      authToken = data.access_token;
+      try { sessionStorage.setItem("suivi-token", authToken); } catch (e) {}
+      await bootAfterLogin();
+    } catch (e2) { err.textContent = "Connexion impossible au serveur."; }
+  });
+
+  document.getElementById("adminBtn").addEventListener("click", showAdmin);
+  document.getElementById("adminBackBtn").addEventListener("click", showApp);
+
+  document.getElementById("userForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const uerr = document.getElementById("userError"); uerr.textContent = "";
+    const email = document.getElementById("newUserEmail").value.trim();
+    const password = document.getElementById("newUserPassword").value;
+    const is_admin = document.getElementById("newUserAdmin").checked;
+    try {
+      await api("/users", { method: "POST", body: JSON.stringify({ email, password, is_admin }) });
+      document.getElementById("userForm").reset();
+      loadUsers();
+    } catch (e2) {
+      uerr.textContent = "Création impossible (email déjà utilisé ?).";
+    }
+  });
+
+  // Après un login réussi (ou au chargement avec token existant) :
+  async function bootAfterLogin() {
+    try {
+      currentUser = await api("/auth/me");
+    } catch (e) { logout(); return; }
+    try { await load(); } catch (e) { db.candidates = []; }
+    currentId = db.candidates.length ? db.candidates[0].id : null;
+    showApp();
+    renderAll();
+  }
+
+  // ---- init ----
+  if (authToken) {
+    bootAfterLogin();   // token en session → on tente de reprendre
+  } else {
+    showLogin();
+  }
+})();
+</script>
+
+</body></html>
